@@ -31,10 +31,10 @@ cd clog
 
 ### Usage
 
-You can include the logging library in your project by including the `logger.h` file:
+You can include the logging library in your project by including the `clog.h` file:
 
 ```c
-#include "logger.h"
+#include "clog.h"
 ```
 
 To log messages with varying severity levels, use the `LOG` macro:
@@ -49,7 +49,7 @@ LOG(DBG, NULL, "Debugging message: variable value is %d", some_variable);
 ### Example
 
 ```c
-#include "logger.h"
+#include "clog.h"
 
 int main() {
     LOG(INFO, NULL, "This is an informational message.");
@@ -64,7 +64,7 @@ int main() {
 Compile and run your program:
 
 ```bash
-gcc -pthread -o my_program my_program.c src/logger.c
+gcc -pthread -o my_program my_program.c src/clog.c
 ./my_program
 ```
 
@@ -100,7 +100,7 @@ The `clog` library comes with a set of unit tests to ensure its core functionali
 make test
 ```
 
-This will compile and execute all test cases, verifying that the logger functions as expected.
+This will compile and execute all test cases, verifying that the clog functions as expected.
 
 ### Test Structure
 

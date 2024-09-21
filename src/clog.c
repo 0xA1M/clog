@@ -1,13 +1,13 @@
-#include <errno.h>   // For handling system errors and using errno
-#include <netdb.h>   // For handling network errors and using gai_strerror()
-#include <pthread.h> // For thread safety
-#include <stdarg.h> // For handling variable arguments (va_list, va_start, etc.)
-#include <stdio.h>  // For standard I/O functions (printf, vprintf, etc.)
-#include <stdlib.h> // For free
-#include <string.h> // For strerror (converts errno to a human-readable string)
-#include <time.h>   // For handling and formatting time
+#include <errno.h>
+#include <netdb.h>
+#include <pthread.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
 
-#include "logger.h"
+#include "clog.h"
 
 static pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
 

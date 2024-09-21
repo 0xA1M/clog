@@ -2,7 +2,7 @@
 CC = gcc
 
 # Compiler flags
-CFLAGS = -Wall -Wextra -pthread -Isrc -Wgnu-zero-variadic-macro-arguments
+CFLAGS = -Wall -Wextra -pthread -Isrc
 
 # Directories
 SRC_DIR = ./src
@@ -10,7 +10,7 @@ TESTS_DIR = ./tests
 BUILD_DIR = ./build
 
 # Source files
-SRC_FILES = $(SRC_DIR)/logger.c
+SRC_FILES = $(SRC_DIR)/clog.c
 
 # Test source files
 TEST_FILES = $(wildcard $(TESTS_DIR)/*.c)

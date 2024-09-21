@@ -28,10 +28,10 @@
     ```bash
     git clone https://github.com/0xA1M/clog
     ```
-2. Add `logger.h` and `logger.c` to your project.
-3. Include `logger.h` in your source code:
+2. Add `clog.h` and `clog.c` to your project.
+3. Include `clog.h` in your source code:
     ```c
-    #include "logger.h"
+    #include "clog.h"
     ```
 
 ---
@@ -163,7 +163,7 @@ Here are examples of using **clog** for various purposes:
 ### Example 1: Logging Information
 
 ```c
-#include "logger.h"
+#include "clog.h"
 
 int main() {
     LOG(INFO, NULL, "Application started successfully.");
@@ -176,7 +176,7 @@ int main() {
 ### Example 2: Logging Warnings
 
 ```c
-#include "logger.h"
+#include "clog.h"
 
 int main() {
     int ret = some_function();
@@ -191,7 +191,7 @@ int main() {
 ### Example 3: Logging Errors
 
 ```c
-#include "logger.h"
+#include "clog.h"
 #include <errno.h>
 
 int main() {
@@ -207,7 +207,7 @@ int main() {
 ### Example 4: Debug Logging
 
 ```c
-#include "logger.h"
+#include "clog.h"
 
 int main() {
     int value = 42;

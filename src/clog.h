@@ -1,5 +1,5 @@
-#ifndef LOGGER_H
-#define LOGGER_H
+#ifndef CLOG_H
+#define CLOG_H
 
 /* Reset Escape Sequence */
 #define RESET "\x1B[0m" // Resets all previous ANSI escape codes
@@ -47,11 +47,6 @@ void log_message(log_level_t level, const char *custom_error, const char *file,
  */
 void logger_cleanup(void);
 
-#if defined(__GNUC__) || defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
-#endif
-
 /**
  * @brief Macro for Easier Logging with File, Line, and Function Info
  *
@@ -72,86 +67,4 @@ void logger_cleanup(void);
   log_message(level, custom_error, __FILE__, __LINE__, __func__, format,       \
               ##__VA_ARGS__)
 
-#if defined(__GNUC__) || defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
-
-/**
- * @examples: Examples of using the `LOG` macro for various log levels.
- *
- * 1. **Logging an Informational Message**
- *
- *    ```c
- *    #include "logger.h"
- *
- *    int main() {
- *        // Log an informational message
- *        LOG(LOG_INFO, NULL, "This is an info message with value: %d\n", 42);
- *        return 0;
- *    }
- *    ```
- *
- * 2. **Logging a Warning Message**
- *
- *    ```c
- *    #include "logger.h"
- *
- *    int main() {
- *        // Simulate a condition where a warning should be logged
- *        int warning_code = 1; // Example warning code
- *
- *        // Log a warning message with code
- *        LOG(LOG_WARNING, NULL, "This is a warning with code: %d\n",
- * warning_code); return 0;
- *    }
- *    ```
- *
- * 3. **Logging an Error Message with `errno`**
- *
- *    ```c
- *    #include "logger.h"
- *    #include <errno.h>
- *
- *    int main() {
- *        // Simulate an error condition
- *        FILE *file = fopen("nonexistent_file.txt", "r");
- *        if (!file) {
- *            // Log an error message including `errno`
- *            LOG(LOG_ERROR, NULL, "Failed to open file\n");
- *        }
- *        return 0;
- *    }
- *    ```
- *
- * 4. **Logging an Error Message with a Custom Error**
- *
- *    ```c
- *    #include "logger.h"
- *    #include <netdb.h> // For gai_strerror
- *
- *    int main() {
- *        // Simulate a getaddrinfo failure
- *        int errcode = EAI_AGAIN; // Example error code
- *        const char *custom_err = gai_strerror(errcode);
- *
- *        // Log an error message with a custom error message
- *        LOG(LOG_ERROR, custom_err, "Failed to resolve hostname\n");
- *        return 0;
- *    }
- *    ```
- *
- * 5. **Logging a Debug Message**
- *
- *    ```c
- *    #include "logger.h"
- *
- *    int main() {
- *        // Log a debug message with additional information
- *        int debug_value = 123;
- *        LOG(LOG_DEBUG, NULL, "Debugging value: %d\n", debug_value);
- *        return 0;
- *    }
- *    ```
- */
-
-#endif /* LOGGER_H */
+#endif /* CLOG_H */
