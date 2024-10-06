@@ -1,2 +1,5 @@
 # Ignore build directory
 /build
+
+# Clangd config
+.clangd
