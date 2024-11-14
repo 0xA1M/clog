@@ -29,10 +29,6 @@
     git clone https://github.com/0xA1M/clog
     ```
 2. Add `clog.h` and `clog.c` to your project.
-3. Include `clog.h` in your source code:
-    ```c
-    #include "clog.h"
-    ```
 
 ---
 
