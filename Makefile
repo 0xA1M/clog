@@ -23,6 +23,9 @@ TEST_MAIN  := $(SRC_DIR)/runner.c
 TEST_IMPLS := $(filter-out $(TEST_MAIN), $(wildcard $(SRC_DIR)/*.c))
 TARGET     := $(BUILD_DIR)/test_suite$(EXE)
 
+# Object files
+OBJS       := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(TEST_MAIN) $(TEST_IMPLS))
+
 .PHONY: all tests clean run
 
 all: tests
@@ -34,8 +37,12 @@ tests: $(TARGET)
 $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)
 
+# Compile source files to object files
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c clog.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
 # Link test suite
-$(TARGET): $(TEST_MAIN) $(TEST_IMPLS) clog.h | $(BUILD_DIR)
+$(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 run: tests
