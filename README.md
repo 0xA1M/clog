@@ -1,131 +1,164 @@
-# clog: A Lightweight, Thread-Safe Logging Library for C
+# clog: A Lightweight, Thread‑Safe, Colorful C Logging Library
 
-`clog` is a simple, thread-safe logging library for C that supports multiple log levels (INFO, WARN, ERROR, DEBUG) and customizable output formatting. It can be used in both single-threaded and multi-threaded applications to provide detailed, context-rich logging.
+`clog` is a single‑header, thread‑safe logging library for C, offering timestamped, context‑rich output with configurable levels and color modes. It works on POSIX and Windows, and requires no dynamic allocations in the hot path.
 
 ## Features
-- Thread-safe logging with `pthread_mutex`
-- Support for multiple log levels:
-  - **INFO**: Informational messages
-  - **WARN**: Warnings that may indicate potential problems
-  - **ERR**: Error messages that indicate failures
-  - **DBG**: Debugging messages for development
-- Contextual information included in logs (file, line number, function)
-- ANSI color-coded log output for enhanced readability
-- Customizable error messages or automatic integration with `errno` for error handling
-- Extensive documentation and examples
+
+- **Log Levels**: TRACE, DEBUG, INFO, WARN, ERROR, FATAL
+- **Thread Safety**:
+  Uses Windows Critical Sections, C11 atomics, or GCC/Clang spin-locks; fallback to no-op in single-threaded builds
+- **Signal Safety**:
+  Provides a minimal, async-signal-safe logging function `clog_signal_log` for use in signal handlers
+- **Color Modes**:
+  - Auto-detect (ANSI on POSIX TTYs or modern Windows consoles)
+  - Force ANSI escapes
+  - Force Windows Console API
+  - Always/never color
+- **Contextual Output**:
+  Outputs timestamp, level tag, message, and optional `(file:line in function)` location info
+- **Customizable**:
+  - `clog_set_level(...)` to filter by minimum level
+  - `clog_set_color_mode(...)` to override color behavior
+  - `clog_set_output(...)` to redirect logs to any `FILE*`
+- **Performance-oriented**:
+  Pre-allocated buffers, no `malloc` in log path
+- **Portable**:
+  Works on Linux, macOS, Windows (compatible with MSVC, GCC, Clang)
 
 ## Getting Started
 
 ### Requirements
-- GCC or Clang compiler
-- POSIX-compatible system (for `pthread` and `errno`)
+
+- C compiler supporting C11 (optional)
+- POSIX or Win32 API for threading and console handling
 
 ### Installation
 
-Clone the repository to your local system:
-
-```bash
-git clone https://github.com/0xA1M/clog
+```sh
+git clone https://github.com/0xA1M/clog.git
 cd clog
-```
+````
 
-### Usage
-
-You can include the logging library in your project by including the `clog.h` file:
+Then copy `clog.h` into your project:
 
 ```c
 #include "clog.h"
 ```
 
-To log messages with varying severity levels, use the `LOG` macro:
+## Usage
+
+### Basic Logging
 
 ```c
-LOG(INFO, NULL, "This is an informational message.");
-LOG(WARN, NULL, "This is a warning.");
-LOG(ERR, "Custom error message", "This is an error.");
-LOG(DBG, NULL, "Debugging message: variable value is %d", some_variable);
+INFO("Server started on port %d", port);
+WARN("Low disk space: %d%% remaining", percent);
+ERROR("Failed to open file: %s", strerror(errno));
+DEBUG("Cache hit for key '%s'", key);
+TRACE("Entering function %s", __func__);
+FATAL("Unexpected null pointer");
 ```
 
-### Example
+### Configuration
+
+Set minimum log level (default is INFO):
 
 ```c
-#include "clog.h"
-
-int main() {
-    LOG(INFO, NULL, "This is an informational message.");
-    LOG(WARN, NULL, "This is a warning.");
-    LOG(ERR, NULL, "This is an error with errno: %s", strerror(errno));
-    LOG(DBG, NULL, "Debug message: %d", 42);
-
-    return 0;
-}
+clog_set_level(CLOG_DEBUG);
 ```
 
-Compile and run your program:
+Control color output (default is `CLOG_COLOR_AUTO`):
 
-```bash
-gcc -pthread -o my_program my_program.c src/clog.c
-./my_program
+```c
+clog_set_color_mode(CLOG_COLOR_NEVER);
+clog_set_color_mode(CLOG_COLOR_ALWAYS);
+clog_set_color_mode(CLOG_COLOR_ANSI);
+clog_set_color_mode(CLOG_COLOR_WIN32);
 ```
 
-## Documentation
+Redirect log output (default is `stdout`):
 
-An extensive documentation of the `clog` library is available in the `docs/` folder. The documentation includes:
-- Detailed descriptions of the library's features
-- How the logging system works
-- Function reference
-- Examples and use cases
-
-### Accessing the Documentation
-
-You can explore the documentation locally by navigating to the `docs/` folder, or view it online if available.
-
-```bash
-cd docs/
+```c
+FILE *fp = fopen("app.log", "w");
+clog_set_output(fp);
+// ... logging calls ...
+fclose(fp);
 ```
 
-## Running Tests
+> ⚠️ **Note**: If you redirect output to a file, you should disable colors using `clog_set_color_mode(CLOG_COLOR_NEVER)` as ANSI escape codes may not render properly in files.
+> ✅ **TODO**: Improve color handling for file outputs.
 
-The `clog` library comes with a set of unit tests to ensure its core functionality and thread safety. These tests are located in the `tests/` folder and cover:
-- Basic logging
-- Error handling (with and without custom messages)
-- Thread safety in multi-threaded environments
+Cleanup (optional, automatically called via `atexit`):
 
-### Running the Test Suite
+```c
+clog_cleanup();
+```
 
-1. Ensure you have the test dependencies installed.
-2. Run the tests using the `Makefile`.
+## API Reference
 
-```bash
+```c
+void clog_set_level(clog_level_t level);
+void clog_set_color_mode(clog_color_mode_t mode);
+void clog_set_output(FILE *fp);
+void clog_cleanup(void);
+void clog_signal_log(const char *message); // Async-signal-safe, minimal logging to stderr
+
+enum clog_level_t {
+    CLOG_TRACE, CLOG_DEBUG, CLOG_INFO,
+    CLOG_WARN,  CLOG_ERROR, CLOG_FATAL
+};
+
+enum clog_color_mode_t {
+    CLOG_COLOR_AUTO, CLOG_COLOR_NEVER,
+    CLOG_COLOR_ALWAYS, CLOG_COLOR_ANSI,
+    CLOG_COLOR_WIN32
+};
+```
+
+All log macros expand to `clog_log(...)` and automatically capture file, line, and function.
+
+## Building & Testing
+
+The test suite lives under `tests/` and covers:
+
+* Basic functionality and level filtering
+* Memory-safety and buffer limits
+* Signal-handler safety
+* Thread-safety (requires pthreads)
+* Performance benchmarks
+* Configuration and output redirection
+
+### Build & Run
+
+```sh
 make test
 ```
 
-This will compile and execute all test cases, verifying that the clog functions as expected.
+## Compatibility
 
-### Test Structure
+✅ `clog` is **tested on Linux** (x86\_64) with:
 
-- Tests are located in the `tests/` folder.
-- The `Makefile` will compile the tests and place executables in the `build/` directory.
-- Each test executable is run to validate different aspects of the library.
+* **GCC**, **Clang** compilers
+* **glibc** and **musl** C libraries
+* Both **multi-threaded** and **single-threaded** builds
+* Modern **terminal emulators** with ANSI support (GNOME Terminal, Alacritty, etc.)
+
+⚠️ Support for **Windows** is implemented but not yet fully tested in production.
+If you use it on Windows, feedback and patches are welcome!
+
+## Examples
+
+See `tests/runner.c` for full test coverage and usage examples.
 
 ## Contributing
 
-Contributions are welcome! If you'd like to contribute, please follow these steps:
-1. Fork the repository.
-2. Create a new branch (`git checkout -b my-feature-branch`).
-3. Make your changes.
-4. Commit your changes (`git commit -m "Add some feature"`).
-5. Push to the branch (`git push origin my-feature-branch`).
-6. Open a pull request.
+1. Fork the repo
+2. Create your branch: `git checkout -b feature/foo`
+3. Commit your changes
+4. Push: `git push origin feature/foo`
+5. Open a Pull Request
 
-## Future Improvements (TODO)
-
-The library can be extended with additional features in future updates:
-- [ ] Log file output and rotation.
-- [ ] Configurable log levels (e.g., disable debug logs in production).
-- [ ] Asynchronous logging to improve performance.
-- [ ] Support for structured logging formats like JSON.
+✅ Please include tests and make sure all tests pass before submitting.
 
 ## License
 
-`clog` is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+MIT License. See [LICENSE](LICENSE) for details.

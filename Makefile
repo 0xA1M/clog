@@ -1,46 +1,37 @@
-# Compiler
-CC = gcc
+# Detect platform
+ifeq ($(OS),Windows_NT)
+  CC        := mingw32-gcc
+  LDFLAGS   :=
+  CLEAN_CMD := del /Q
+else
+  CC        := gcc
+  LDFLAGS   := -pthread
+  CLEAN_CMD := rm -rf
+endif
 
-# Compiler flags
-CFLAGS = -Wall -Wextra -pthread -Isrc
+# Compiler Flags
+CFLAGS    := -Wall -Wextra -Wno-trigraphs  -I.
 
 # Directories
-SRC_DIR = ./src
-TESTS_DIR = ./tests
-BUILD_DIR = ./build
+SRC_DIR   := tests
+BUILD_DIR := build
 
-# Source files
-SRC_FILES = $(SRC_DIR)/clog.c
+# Test driver and implementations
+# tests/test_runner.c contains the main() function
+TEST_MAIN    := $(SRC_DIR)/runner.c
+# All other test implementation files
+TEST_IMPLS   := $(filter-out $(TEST_MAIN), $(wildcard $(SRC_DIR)/*.c))
 
-# Test source files
-TEST_FILES = $(wildcard $(TESTS_DIR)/*.c)
+.PHONY: all tests clean
 
-# Object files for each test
-OBJ_FILES = $(patsubst $(TESTS_DIR)/%.c, $(BUILD_DIR)/%.o, $(TEST_FILES))
+all: tests
 
-# Test executables
-TEST_EXECUTABLES = $(patsubst $(TESTS_DIR)/%.c, $(BUILD_DIR)/%, $(TEST_FILES))
+tests: $(BUILD_DIR)/test_suite
+	@echo "Built test suite: $(BUILD_DIR)/test_suite"
 
-# Targets
-all: $(BUILD_DIR) $(TEST_EXECUTABLES)
+# Link main with all test implementations
+$(BUILD_DIR)/test_suite: $(TEST_MAIN) $(TEST_IMPLS) clog.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-# Create the build directory if it doesn't exist
-$(BUILD_DIR):
-	mkdir -p $(BUILD_DIR)
-
-# Compile each test file into an executable
-$(BUILD_DIR)/%: $(TESTS_DIR)/%.c $(SRC_FILES)
-	$(CC) $(CFLAGS) $< $(SRC_FILES) -o $@
-
-# Clean up
 clean:
-	rm -rf $(BUILD_DIR)
-
-# Run all tests
-test: all
-	@for test in $(TEST_EXECUTABLES); do \
-		echo "Running $$test..."; \
-		./$$test || exit 1; \
-	done
-
-.PHONY: all clean test
+	$(CLEAN_CMD) $(BUILD_DIR)/
