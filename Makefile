@@ -1,37 +1,54 @@
 # Detect platform
 ifeq ($(OS),Windows_NT)
-  CC        := mingw32-gcc
-  LDFLAGS   :=
-  CLEAN_CMD := del /Q
+    CC         := mingw32-gcc
+    LDFLAGS    :=
+    RM         := rmdir /S /Q
+    EXE        := .exe
 else
-  CC        := gcc
-  LDFLAGS   := -pthread
-  CLEAN_CMD := rm -rf
+    CC         := gcc
+    LDFLAGS    := -pthread
+    RM         := rm -rf
+    EXE        :=
 endif
 
 # Compiler Flags
-CFLAGS    := -Wall -Wextra -Wno-trigraphs  -I.
+CFLAGS     := -Wall -Wextra -Wno-trigraphs -I.
 
 # Directories
-SRC_DIR   := tests
-BUILD_DIR := build
+SRC_DIR    := tests
+BUILD_DIR  := build
 
 # Test driver and implementations
-# tests/test_runner.c contains the main() function
-TEST_MAIN    := $(SRC_DIR)/runner.c
-# All other test implementation files
-TEST_IMPLS   := $(filter-out $(TEST_MAIN), $(wildcard $(SRC_DIR)/*.c))
+TEST_MAIN  := $(SRC_DIR)/runner.c
+TEST_IMPLS := $(filter-out $(TEST_MAIN), $(wildcard $(SRC_DIR)/*.c))
+TARGET     := $(BUILD_DIR)/test_suite$(EXE)
 
-.PHONY: all tests clean
+.PHONY: all tests clean run
 
 all: tests
 
-tests: $(BUILD_DIR)/test_suite
-	@echo "Built test suite: $(BUILD_DIR)/test_suite"
+tests: $(TARGET)
+	@echo "✅ Built test suite: $(TARGET)"
 
-# Link main with all test implementations
-$(BUILD_DIR)/test_suite: $(TEST_MAIN) $(TEST_IMPLS) clog.h | $(BUILD_DIR)
+# Create the build directory in a platform-compatible way
+$(BUILD_DIR):
+ifeq ($(OS),Windows_NT)
+	@if not exist $(BUILD_DIR) mkdir $(BUILD_DIR)
+else
+	@mkdir -p $(BUILD_DIR)
+endif
+
+# Link test suite
+$(TARGET): $(TEST_MAIN) $(TEST_IMPLS) clog.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
+run: tests
+	@echo "🚀 Running test suite..."
+	@$(TARGET)
+
 clean:
-	$(CLEAN_CMD) $(BUILD_DIR)/
+ifeq ($(OS),Windows_NT)
+	$(RM) $(BUILD_DIR)
+else
+	$(RM) $(BUILD_DIR)
+endif
