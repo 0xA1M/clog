@@ -1,8 +1,8 @@
 # Detect platform
 ifeq ($(OS),Windows_NT)
-    CC         := mingw32-gcc
+    CC         := gcc
     LDFLAGS    :=
-    RM         := rmdir /S /Q
+    RM         := rm -rf
     EXE        := .exe
 else
     CC         := gcc
@@ -30,13 +30,9 @@ all: tests
 tests: $(TARGET)
 	@echo "✅ Built test suite: $(TARGET)"
 
-# Create the build directory in a platform-compatible way
+# Create build directory
 $(BUILD_DIR):
-ifeq ($(OS),Windows_NT)
-	@if not exist $(BUILD_DIR) mkdir $(BUILD_DIR)
-else
 	@mkdir -p $(BUILD_DIR)
-endif
 
 # Link test suite
 $(TARGET): $(TEST_MAIN) $(TEST_IMPLS) clog.h | $(BUILD_DIR)
@@ -47,8 +43,4 @@ run: tests
 	@$(TARGET)
 
 clean:
-ifeq ($(OS),Windows_NT)
 	$(RM) $(BUILD_DIR)
-else
-	$(RM) $(BUILD_DIR)
-endif
