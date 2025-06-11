@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <sys/wait.h>
 #ifdef _WIN32
 #include <windows.h>
 #define usleep(t) Sleep(t / 1000)
