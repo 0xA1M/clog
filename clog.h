@@ -2,6 +2,7 @@
 #define CLOG_H
 
 #include <stdarg.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,11 +28,18 @@
 #include <unistd.h>
 #endif
 
+/* Attribute macro for cross-platform compatibility */
+#if defined(__GNUC__) || defined(__clang__)
+#define ATTRIBUTE_UNUSED __attribute__((unused))
+#else
+#define ATTRIBUTE_UNUSED
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Configuration */
+/* Configuration constants */
 #ifndef CLOG_MAX_MESSAGE_SIZE
 #define CLOG_MAX_MESSAGE_SIZE 1024
 #endif
@@ -125,7 +133,7 @@ typedef enum {
 
 /* Global state */
 static clog_mutex_t clog_mutex;
-static bool clog_mutex_initialized = false;
+static atomic_bool clog_is_initialized = false;
 static clog_level_t clog_min_level = CLOG_TRACE;
 static clog_color_mode_t clog_color_mode = CLOG_COLOR_AUTO;
 static FILE *clog_output = NULL; /* NULL means stdout */
@@ -139,32 +147,47 @@ static bool clog_console_initialized = false;
 #endif
 
 /* Function declarations */
+/* Initializes the logging system, ensuring thread-safe setup */
 static void clog_init(void);
+/* Cleans up resources, called automatically via atexit */
 static void clog_cleanup(void);
+/* Returns string representation of log level */
 static const char *clog_level_string(clog_level_t level);
+/* Returns ANSI color code for log level */
 static const char *clog_level_color_ansi(clog_level_t level);
+/* Formats current time into buffer */
 static void clog_format_time(char *buffer, size_t size);
+/* Writes string to output, handling Unicode on Windows */
 static void clog_safe_write(const char *str, size_t len);
-
-/*  __attribute__((unused)) To suppress compiler unused function warning */
-static void clog_set_output(FILE *fp) __attribute__((unused));
-static void clog_set_level(clog_level_t level) __attribute__((unused));
-static void clog_set_color_mode(clog_color_mode_t mode) __attribute__((unused));
-static void clog_set_show_timestamp(bool show) __attribute__((unused));
-static void clog_set_show_location(bool show) __attribute__((unused));
-static void clog_safe_strcat(char *dest, const char *src, size_t dest_size)
-    __attribute__((unused));
-static void clog_safe_strcpy(char *dest, const char *src, size_t dest_size)
-    __attribute__((unused));
-
+/* Sets output file for logging */
+static void clog_set_output(FILE *fp) ATTRIBUTE_UNUSED;
+/* Sets minimum log level */
+static void clog_set_level(clog_level_t level) ATTRIBUTE_UNUSED;
+/* Sets color mode for output */
+static void clog_set_color_mode(clog_color_mode_t mode) ATTRIBUTE_UNUSED;
+/* Toggles timestamp display */
+static void clog_set_show_timestamp(bool show) ATTRIBUTE_UNUSED;
+/* Toggles location display */
+static void clog_set_show_location(bool show) ATTRIBUTE_UNUSED;
+/* Safely concatenates strings */
+static void clog_safe_strcat(char *dest, const char *src,
+                             size_t dest_size) ATTRIBUTE_UNUSED;
+/* Safely copies strings */
+static void clog_safe_strcpy(char *dest, const char *src,
+                             size_t dest_size) ATTRIBUTE_UNUSED;
+/* Internal logging implementation */
 static void clog_log_impl(clog_level_t level, const char *file, int line,
                           const char *func, const char *format, va_list args);
 
 #if CLOG_WINDOWS
+/* Initializes Windows console for color support */
 static void clog_init_console(void);
+/* Sets console color based on log level */
 static void clog_set_console_color(clog_level_t level);
+/* Resets console color to default */
 static void clog_reset_console_color(void);
-static int clog_is_console_output(FILE *fp);
+/* Checks if output is a console */
+static bool clog_is_console_output(FILE *fp);
 #endif
 
 /* Signal-safe logging function for use in signal handlers */
@@ -176,7 +199,7 @@ static inline void clog_log(clog_level_t level, const char *file, int line,
   if (level < clog_min_level)
     return;
 
-  if (!clog_mutex_initialized) {
+  if (!atomic_load(&clog_is_initialized)) {
     clog_init();
   }
 
@@ -204,22 +227,25 @@ static inline void clog_log(clog_level_t level, const char *file, int line,
 
 /* Implementation */
 static void clog_init(void) {
-  if (clog_mutex_initialized)
+  if (atomic_load(&clog_is_initialized)) {
     return;
-
-  CLOG_MUTEX_INIT(&clog_mutex);
-  clog_mutex_initialized = true;
-
+  }
+  bool expected = false;
+  if (atomic_compare_exchange_strong(&clog_is_initialized, &expected, true)) {
+    CLOG_MUTEX_INIT(&clog_mutex);
 #if CLOG_WINDOWS
-  clog_init_console();
+    clog_init_console();
 #endif
-
-  /* Register cleanup function */
-  atexit(clog_cleanup);
+    atexit(clog_cleanup);
+  } else {
+    while (!atomic_load(&clog_is_initialized)) {
+      // Busy wait
+    }
+  }
 }
 
 static void clog_cleanup(void) {
-  if (!clog_mutex_initialized)
+  if (!atomic_load(&clog_is_initialized))
     return;
 
 #if CLOG_WINDOWS
@@ -230,7 +256,7 @@ static void clog_cleanup(void) {
 #endif
 
   CLOG_MUTEX_DESTROY(&clog_mutex);
-  clog_mutex_initialized = false;
+  atomic_store(&clog_is_initialized, false);
 }
 
 static void clog_set_level(clog_level_t level) { clog_min_level = level; }
@@ -295,7 +321,6 @@ static void clog_init_console(void) {
       clog_original_console_attrs = console_info.wAttributes;
       clog_console_initialized = true;
 
-      /* Try to enable ANSI escape sequences on Windows 10+ */
       DWORD console_mode;
       if (GetConsoleMode(clog_console_handle, &console_mode)) {
         console_mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
@@ -345,66 +370,75 @@ static void clog_reset_console_color(void) {
   }
 }
 
-static int clog_is_console_output(FILE *fp) {
+static bool clog_is_console_output(FILE *fp) {
   if (!fp)
     fp = stdout;
 
-  /* Check if output is going to console */
   int fd = _fileno(fp);
-  return _isatty(fd);
+  HANDLE h = (HANDLE)_get_osfhandle(fd);
+  DWORD mode;
+  return GetConsoleMode(h, &mode) != 0;
 }
 #endif
 
-/* Cross-platform time formatting */
 static void clog_format_time(char *buffer, size_t size) {
   time_t now;
   struct tm *tm_info;
 
   now = time(NULL);
   if (now == (time_t)-1) {
-    strncpy(buffer, "0000-00-00 00:00:00", size - 1);
-    buffer[size - 1] = '\0';
+    snprintf(buffer, size, "0000-00-00 00:00:00");
     return;
   }
 
 #if CLOG_WINDOWS
-  /* Windows thread-safe version */
   struct tm tm_storage;
   if (localtime_s(&tm_storage, &now) != 0) {
-    strncpy(buffer, "0000-00-00 00:00:00", size - 1);
-    buffer[size - 1] = '\0';
+    snprintf(buffer, size, "0000-00-00 00:00:00");
     return;
   }
   tm_info = &tm_storage;
 #else
-  /* POSIX thread-safe version */
   struct tm tm_storage;
   tm_info = localtime_r(&now, &tm_storage);
   if (!tm_info) {
-    strncpy(buffer, "0000-00-00 00:00:00", size - 1);
-    buffer[size - 1] = '\0';
+    snprintf(buffer, size, "0000-00-00 00:00:00");
     return;
   }
 #endif
 
   if (strftime(buffer, size, "%Y-%m-%d %H:%M:%S", tm_info) == 0) {
-    strncpy(buffer, "0000-00-00 00:00:00", size - 1);
-    buffer[size - 1] = '\0';
+    snprintf(buffer, size, "0000-00-00 00:00:00");
   }
 }
 
-/* Safe write function */
 static void clog_safe_write(const char *str, size_t len) {
   FILE *output = clog_output ? clog_output : stdout;
-
-  if (fwrite(str, 1, len, output) != len) {
-    /* Error handling is limited in signal-safe context */
-    exit(EXIT_FAILURE);
+#if CLOG_WINDOWS
+  if (clog_is_console_output(output)) {
+    int wlen = MultiByteToWideChar(CP_UTF8, 0, str, len, NULL, 0);
+    if (wlen > 0) {
+      wchar_t *wstr = malloc((wlen + 1) * sizeof(wchar_t));
+      if (wstr) {
+        MultiByteToWideChar(CP_UTF8, 0, str, len, wstr, wlen);
+        wstr[wlen] = L'\0';
+        fwprintf(output, L"%s", wstr);
+        free(wstr);
+      } else {
+        fwrite(str, 1, len, output);
+      }
+    } else {
+      fwrite(str, 1, len, output);
+    }
+  } else {
+    fwrite(str, 1, len, output);
   }
+#else
+  fwrite(str, 1, len, output);
+#endif
   fflush(output);
 }
 
-/* Signal-safe logging implementation */
 static inline void clog_signal_log(const char *message) {
 #if CLOG_POSIX
   size_t len = strlen(message);
@@ -412,12 +446,25 @@ static inline void clog_signal_log(const char *message) {
   write(STDERR_FILENO, "\n", 1);
 #else /* CLOG_WINDOWS */
   size_t len = strlen(message);
-  _write(_fileno(stderr), message, len);
-  _write(_fileno(stderr), "\n", 1);
+  int wlen = MultiByteToWideChar(CP_UTF8, 0, message, len, NULL, 0);
+  if (wlen > 0) {
+    wchar_t *wstr = malloc((wlen + 1) * sizeof(wchar_t));
+    if (wstr) {
+      MultiByteToWideChar(CP_UTF8, 0, message, len, wstr, wlen);
+      wstr[wlen] = L'\0';
+      fwprintf(stderr, L"%s\n", wstr);
+      free(wstr);
+    } else {
+      _write(_fileno(stderr), message, len);
+      _write(_fileno(stderr), "\n", 1);
+    }
+  } else {
+    _write(_fileno(stderr), message, len);
+    _write(_fileno(stderr), "\n", 1);
+  }
 #endif
 }
 
-/* Safe string length calculation with maximum limit */
 static size_t clog_safe_strlen(const char *str, size_t max_len) {
   if (!str)
     return 0;
@@ -428,7 +475,6 @@ static size_t clog_safe_strlen(const char *str, size_t max_len) {
   return len;
 }
 
-/* Safe string copy */
 static void clog_safe_strcpy(char *dest, const char *src, size_t dest_size) {
   if (!dest || dest_size == 0)
     return;
@@ -445,7 +491,6 @@ static void clog_safe_strcpy(char *dest, const char *src, size_t dest_size) {
   dest[i] = '\0';
 }
 
-/* Safe string concatenation */
 static void clog_safe_strcat(char *dest, const char *src, size_t dest_size) {
   if (!dest || !src || dest_size == 0)
     return;
@@ -464,7 +509,6 @@ static void clog_safe_strcat(char *dest, const char *src, size_t dest_size) {
   dest[dest_len + i] = '\0';
 }
 
-/* Extract filename from path (handles both / and \ separators) */
 static const char *clog_basename(const char *path) {
   if (!path)
     return "unknown";
@@ -482,7 +526,6 @@ static const char *clog_basename(const char *path) {
   return filename;
 }
 
-/* Determine if colors should be used */
 static bool clog_should_use_colors(void) {
   FILE *output = clog_output ? clog_output : stdout;
 
@@ -503,7 +546,6 @@ static bool clog_should_use_colors(void) {
   }
 }
 
-/* Determine color implementation to use */
 static bool clog_use_ansi_colors(void) {
   if (!clog_should_use_colors())
     return false;
@@ -517,52 +559,40 @@ static bool clog_use_ansi_colors(void) {
   case CLOG_COLOR_ALWAYS:
   default:
 #if CLOG_WINDOWS
-    /* On Windows 10+, prefer ANSI if available, otherwise use Console API */
-    return true; /* Modern Windows supports ANSI */
+    return true;
 #else
-    return true; /* POSIX systems use ANSI */
+    return true;
 #endif
   }
 }
 
-/* Main logging implementation */
 static void clog_log_impl(clog_level_t level, const char *file, int line,
                           const char *func, const char *format, va_list args) {
-  /* Pre-allocated buffers to avoid dynamic allocation */
   static char time_buf[CLOG_MAX_TIME_SIZE];
   static char message_buf[CLOG_MAX_MESSAGE_SIZE];
   static char location_buf[CLOG_MAX_LOCATION_SIZE];
   static char final_buf[CLOG_MAX_MESSAGE_SIZE + CLOG_MAX_TIME_SIZE +
                         CLOG_MAX_LOCATION_SIZE + 256];
 
-  if (!clog_mutex_initialized)
+  if (!atomic_load(&clog_is_initialized))
     clog_init();
 
-  /* Acquire lock for thread safety */
   CLOG_MUTEX_LOCK(&clog_mutex);
 
-  /* Format timestamp */
   clog_format_time(time_buf, sizeof(time_buf));
 
-  /* Format the user message */
   vsnprintf(message_buf, sizeof(message_buf), format, args);
 
-  /* Format location info if provided */
   location_buf[0] = '\0';
-  if (file && line > 0 && func) {
+  if (clog_show_location && file && line > 0 && func) {
     snprintf(location_buf, sizeof(location_buf), " (%s:%d in %s)",
              clog_basename(file), line, func);
   }
 
-  /* Determine color settings */
-  bool use_colors = clog_should_use_colors();
-  (void)use_colors; // Suppress compiler unused variable warning
   bool use_ansi = clog_use_ansi_colors();
 
-  /* Build the final log line */
   size_t len = 0;
 
-  /* Step 1: Add timestamp if enabled */
   if (clog_show_timestamp) {
     if (use_ansi) {
       len += snprintf(final_buf + len, sizeof(final_buf) - len, "%s%s%s ",
@@ -573,7 +603,6 @@ static void clog_log_impl(clog_level_t level, const char *file, int line,
     }
   }
 
-  /* Step 2: Add colored log level */
   if (use_ansi) {
     len += snprintf(final_buf + len, sizeof(final_buf) - len, "%s[%s]%s ",
                     clog_level_color_ansi(level), clog_level_string(level),
@@ -583,10 +612,8 @@ static void clog_log_impl(clog_level_t level, const char *file, int line,
                     clog_level_string(level));
   }
 
-  /* Step 3: Add log message */
   len += snprintf(final_buf + len, sizeof(final_buf) - len, "%s", message_buf);
 
-  /* Step 4: Add location if enabled */
   if (clog_show_location && location_buf[0] != '\0') {
     if (use_ansi) {
       len += snprintf(final_buf + len, sizeof(final_buf) - len, " %s%s%s",
@@ -597,27 +624,22 @@ static void clog_log_impl(clog_level_t level, const char *file, int line,
     }
   }
 
-  /* Step 5: Add newline */
   len += snprintf(final_buf + len, sizeof(final_buf) - len, "\n");
 
-  /* For Windows Console API */
 #if CLOG_WINDOWS
-  if (use_colors && !use_ansi) {
+  if (!use_ansi && clog_should_use_colors()) {
     clog_set_console_color(level);
   }
 #endif
 
-  /* Write the log line */
   clog_safe_write(final_buf, len);
 
-  /* Reset console color if using Windows Console API */
 #if CLOG_WINDOWS
-  if (use_colors && !use_ansi) {
+  if (!use_ansi && clog_should_use_colors()) {
     clog_reset_console_color();
   }
 #endif
 
-  /* Release lock */
   CLOG_MUTEX_UNLOCK(&clog_mutex);
 }
 

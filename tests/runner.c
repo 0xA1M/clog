@@ -23,6 +23,8 @@ extern void test_thread_safety(void);
 extern void test_signal_safety(void);
 extern void test_performance(void);
 extern void test_configuration(void);
+extern void test_unicode(void);
+extern void test_integration(void);
 
 int main(void) {
   printf("🚀 CLOG Library Test Suite\n");
@@ -43,6 +45,8 @@ int main(void) {
   test_signal_safety();
   test_performance();
   test_configuration();
+  test_unicode();
+  test_integration();
 
   printf("\n🎉 All tests completed successfully!\n");
   printf("=====================================\n");
